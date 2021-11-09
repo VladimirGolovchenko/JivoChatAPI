@@ -1,63 +1,389 @@
+
 <!DOCTYPE html>
-
-<html lang="ru">
-
+<html lang="ru-RU">
 <head>
-
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-
-    <title> Пример простой страницы html</title>
-
-    <link rel="stylesheet" href="CSS\global.css" type="text/css"/>
-    <link rel="stylesheet" href="CSS\responsive.css" type="text/css"/>
-
-    <script type='text/javascript' src='JS/chatshortcut.js' id='gsl_contacts_container'></script>
-    <script type='text/javascript' src='JS/chatlib.js' id='libgsl-js'></script>
-
-    <script type='text/javascript' src='JS/elfsightsocialwidget.js' id='libgsl-js'></script>
-
+<meta charset="utf-8" />
+<title>Chat API</title>
+<style>
+body { margin: 2.2em; background-color: #2e3436; color: #dcdccc; font-stretch: semi-condensed; font-family: serif; }
+body, pre, code { font-size : 1.2em; }
+pre, code { font-family: monospace; color: #b8f4b8; }
+pre { background-color: #353c3d; }
+h1, h2, h3, h4, h5, h6 { font-family: sans-serif; }
+p { text-align: justify; text-indent: 1.5em; }
+a { text-decoration: none; color: #cc9393; }
+table { border-spacing: 0; border-collapse: collapse; width: 100%; }
+td, th { padding: .3em; border: 1px solid grey; }
+</style>
 </head>
-
 <body>
+<h1><a id="top"></a>Chat API</h1>
+<p>В этой памятке описан способ обмена событиями между серверами по Chat-каналу при интеграции с <a href="https://www.jivo.ru/">Jivo</a>. Chat-канал асинхронный двунаправленный, для полной реализации необходим пользовательский сервер, способный принимать и отправлять события.</p>
 
-    <div id="gsl_contacts_container" class="gsl-contacts-container">
-        <a href="#" class="contacts-link link-jivosite" data-tooltip="Чат с консультантом" onclick="jivo_api.open();return false;">
-        <span class="contacts-badge">
-            <i class="contacts-icon icon-jivosite"></i>
-        </span>
-    </a>
+<h2><a id="proto"></a>Протокол канала</h2>
+<p>Транспортным протоколом для передачи событий является <a href="https://wikipedia.org/wiki/HTTP">HTTPS</a> (на этапе разработки допускается использовать <a href="https://wikipedia.org/wiki/HTTP">HTTP</a>). Событие содержится в теле <a href="https://wikipedia.org/wiki/POST_(HTTP)">POST</a>-запроса в формате <a href="https://www.json.org/">JSON</a> (примечание, кодировка текста в этом формате <a href="https://wikipedia.org/wiki/UTF-8">UTF-8</a>), запрос должен иметь соответствующий заголовок <code>Content-Type: application/json; charset=utf-8</code>. Структура событий описана <a href="#struct">далее</a>. Варианты ответов делятся на 3 группы по HTTP-коду ответа.</p>
+<table>
+<tbody>
+<tr><th>Код</th><th>Описание</th><th>Действие</th></tr>
+<tr><td><a href="https://wikipedia.org/wiki/List_of_HTTP_status_codes#2xx_success">2xx</a></td><td>Успех. Событие принято в обработку</td><td>Сообщить пользователю об успехе доставки</td></tr>
+<tr><td><a href="https://wikipedia.org/wiki/List_of_HTTP_status_codes#4xx_client_errors">4xx</a></td><td>Ошибка запроса. Событие отклонено</td><td>В теле ответа с таким кодом, может быть текст описания ошибки (тип содержимого <code>Content-Type: text/plain; charset=utf-8</code>). Повторно отправлять это событие не следует. Необходим анализ и исправление ошибки программы или настроек канала. Информировать пользователя об ошибке доставки события</td></tr>
+<tr><td>Любой другой HTTP-код или ошибка подключения</td><td>Принять запрос невозможно в данный момент. Событие не принято</td><td>В случае HTTP-кода <a href="https://wikipedia.org/wiki/List_of_HTTP_status_codes#5xx_server_errors">5xx</a> или при неудачном подключении, рекомендуется повторить запрос до 3х раз с промежутком 3-60 секунд. Информировать пользователя о временной невозможности доставки события. Связаться с поддержкой сервера</td></tr>
+</tbody>
+</table>
 
-<a href="#" class="contacts-link link-redconnect contacts-link_disabled" data-tooltip="Заказать звонок возможно с 10.00 до 19.00 UTC+3" onclick="jivo_api.open({start : 'call'});return false;">
-    <span class="contacts-badge">
-        <i class="contacts-icon icon-redconnect"></i>
-    </span>
-</a>
-<a href="https://wa.me/79581003502" class="contacts-link link-whatsapp" target="_blank" data-tooltip="Whatsapp">
-    <span class="contacts-badge">
-        <i class="contacts-icon icon-whatsapp"></i>
-    </span>
-</a>
-<a href="https://t.me/Jivo_bill_bot" class="contacts-link link-telegram" target="_blank" data-tooltip="Telegram">
-    <span class="contacts-badge">
-        <i class="contacts-icon icon-telegram"></i>
-    </span>
-</a>
-<a href="viber://pa?chatURI=vladjivotechsupport" class="contacts-link link-viber" data-tooltip="Viber">
-    <span class="contacts-badge">
-        <i class="contacts-icon icon-viber"></i>
-    </span>
-</a>
-<a href="mailto:info@jivosite.com" class="contacts-link link-mail" data-tooltip="E-mail">
-    <span class="contacts-badge">
-        <i class="contacts-icon icon-mail"></i>
-    </span>
-</a>
-</div>
- 
 
- Тестовая страница для ЮКасса
+<h2><a id="channel"></a>Создание канала</h2>
+<p>Для создания Chat-канала в Jivo следует использовать <a href="https://app.jivosite.com/">приложение</a>. После создания станет доступен <a href="https://wikipedia.org/wiki/URL">URL</a> для отправки событий в Jivo, например: <code>https://wh.jivosite.com/foo/bar</code>. Для приема сообщений от Jivo необходимо реализовать пользовательский сервер и добавить URL на который он будет принимать события в настройки канала в приложении.</p>
+
+<h2><a id="status"></a>Статус канала</h2>
+<p>Если к URL для отправки событий в Jivo добавить в конце пути сегмент <code>/status</code>, например <code>https://wh.jivosite.com/foo/bar/status</code>, то в теле ответа (при успешном овете с кодом <code>2xx</code>) на <a href="https://wikipedia.org/wiki/Hypertext_Transfer_Protocol#Request_methods">GET</a>-запрос по полученному URL будет статус канала, означающий отсутствие собеседников на канале когда ответ <code>0</code>, либо наличие собеседников при ответе <code>1</code> или любом другом.</p>
+
+<h2><a id="struct"></a>Структура событий</h2>
+<p>Протокол симметричный, структура одинакова для событий от Jivo к пользовательскому серверу и обратно.</p>
+<table>
+<tbody>
+<tr><th>Поле</th><th>Тип</th><th>Описание</th></tr>
+<tr><td>sender</td><td><a href="#User">User</a></td><td>Отправитель сообщения</td></tr>
+<tr><td>recipient</td><td><a href="#User">User</a></td><td>Получатель сообщения</td></tr>
+<tr><td>message</td><td><a href="#Message">Message</a></td><td>Сообщение</td></tr>
+</tbody>
+</table>
+<h3><a id="User"></a>User</h3>
+<table>
+<tbody>
+<tr><th>Поле</th><th>Тип</th><th>Описание</th><th>Максимальный размер</th></tr>
+<tr><td>id</td><td>string</td><td>Идентификатор клиента, обязательный параметр при отправке событий в Jivo <code>sender.id</code> и при получении событий от Jivo <code>recipient.id</code></td><td>255 символов</td></tr>
+<tr><td>name</td><td>string</td><td>Имя пользователя</td><td>255 символов</td></tr>
+<tr><td>photo</td><td>string</td><td>URL аватара пользователя, допустимые схемы <code>https</code> или <code>http</code></td><td>2048 символов</td></tr>
+<tr><td>url</td><td>string</td><td>URL страницы пользователя, допустимые схемы <code>https</code> или <code>http</code></td><td>2048 символов</td></tr>
+<tr><td>email</td><td>string</td><td>Электронная почта пользователя</td><td>255 символов</td></tr>
+<tr><td>phone</td><td>string</td><td><a href="https://wikipedia.org/wiki/Telephone_number">Телефонный номер</a> пользователя</td><td>2-15 символов</td></tr>
+<tr><td>invite</td><td>string</td><td>Текст приглашения клиента</td><td>1000 символов</td></tr>
+<tr><td>group</td><td>string</td><td>Отдел в который обращается клиент</td><td>10 цифр</td></tr>
+<tr><td>intent</td><td>string</td><td>Тема обращения клиента</td><td>255 символов</td></tr>
+<tr><td>crm_link</td><td>string</td><td>URL клиента в <a href="https://wikipedia.org/wiki/Customer_relationship_management">CRM</a>-системе</td><td>2048 символов</td></tr>
+</tbody>
+</table>
+<h3><a id="Message"></a>Message</h3>
+
+<table>
+<tbody>
+<tr><th>Поле</th><th>Тип</th><th>Описание</th><th>Максимальный размер</th></tr>
+<tr><td>type</td><td>string</td><td><a href="#type">Тип сообщения</a>, обязательный параметр</td><td>Ограничен допустимыми значениями, варианты смотреть в <a href="#type">таблице</a></td></tr>
+<tr><td>id</td><td>string</td><td>Идентификатор сообщения, необходим если требуется изменить статус сообщения после его отправки</td><td>500 символов</td></tr>
+<tr><td>date</td><td>number</td><td>Время создания/отправки сообщения, целое число</td><td>Ограничено разумными пределами величины <a href="https://en.wikipedia.org/wiki/Unix_time">UNIX-время</a></td></tr>
+<tr><td>file</td><td>string</td><td>URL медиа-данных</td><td rowspan="2">2048 символов, допустимая схема <code>https</code> или <code>http</code></td></tr>
+<tr><td>thumb</td><td>string</td><td>URL изображения предварительного просмотра для медиа-данных</td></tr>
+<tr><td>file_size</td><td>number</td><td>Размер медиа-данных в октетах (байтах)</td><td rowspan="3">Целое положительное число, ограничено возможностями клиентских приложений</td></tr>
+<tr><td>width</td><td>number</td><td>Ширина изображения или видео в пикселах</td></tr>
+<tr><td>height</td><td>number</td><td>Высота изображения или видео в пикселах</td></tr>
+<tr><td>file_name</td><td>string</td><td>Имя файла медиа-данных</td><td>255 символов, возможна несовместимость с устаревшими файловыми системами!</td></tr>
+<tr><td>mime_type</td><td>string</td><td><a href="https://wikipedia.org/wiki/MIME">MIME-тип</a> медиа-данных</td><td>Ограничено списком допустимых значений ??? ссылка ???</td></tr>
+<tr><td>text</td><td>string</td><td>Текст сообщения</td><td>Рекомендуется ограничить длину 1000 символов, при превышении, остатки текста будут досланы отдельными текстовыми сообщениями</td></tr>
+<tr><td>title</td><td>string</td><td>Заголовок сообщения</td><td>255 символов</td></tr>
+<tr><td>latitude</td><td>number</td><td>Широта местоположения, вещественное число</td><td>от -90.0000 до +90.0000</td></tr>
+<tr><td>longitude</td><td>number</td><td>Долгота местоположения, вещественное число</td><td>от -180.0000 до +180.0000</td></tr>
+<tr><td>value</td><td>number</td><td>Число, обычно используется в <a href="#rate">оценке чата</a></td><td><a href="#rate">любое число</a></td></tr>
+<tr><td>keyboard</td><td>[]Key</td><td>Массив структур <a href="#key">Key</a></td><td>7 <a href="#key">клавиш</a></td></tr>
+<tr><td>multiple</td><td>boolean</td><td>Допустимость множественного выбора на <a href="#keyboard">клавиатуре</a>, логическое</td><td>true или false</td></tr>
+</tbody>
+</table>
+
+<h3><a id="Key"></a>Key</h3>
+<p>Обязательным для клавиши является наличие одного поля структуры, как в запросе <code>keyboard</code> так и в ответе. Подробнее в <a href="#keyboard">примере</a>. Приоритет полей для отображения пользователю записан в таблице по убыванию.</p>
+<table>
+<tbody>
+<tr><th>Поле</th><th>Тип</th><th>Описание</th><th>Максимальный размер</th></tr>
+<tr><td>text</td><td>string</td><td>Текст клавиши</td><td>100 символов</td></tr>
+<tr><td>image</td><td>string</td><td>URL изображения (схема <code>https</code> или <code>http</code>)</td><td>2048 символов</td></tr>
+<tr><td>title</td><td>string</td><td>Заголовок или всплывающая подсказка клавиши</td><td>100 символов</td></tr>
+<tr><td>id</td><td>string</td><td>Идентификатор клавиши</td><td>500 символов</td></tr>
+</tbody>
+</table>
+<h2><a id="type"></a>Типы сообщения</h2>
+<table>
+<tbody>
+<tr><th>Тип</th><th>Описание</th><th>Обязательные поля</th></tr>
+<tr><td>text</td><td><a href="#text">Текстовое сообщение</a></td><td>text</td></tr>
+<tr><td>photo</td><td><a href="#photo">Изображение</a></td><td rowspan="5">file</td></tr>
+<tr><td>sticker</td><td><a href="#sticker">Стикер</a></td></tr>
+<tr><td>video</td><td><a href="#video">Видео сообщение</a></td></tr>
+<tr><td>audio</td><td><a href="#audio">Звуковое сообщение</a></td></tr>
+<tr><td>document</td><td><a href="#document">Документ или файл</a>, в сообщении этого типа можно отправлять любые файлы разрешенные для передачи в Jivo. ??? ссылка ???</td></tr>
+<tr><td>location</td><td><a href="#location">Местоположение</a></td><td>latitude<br/>longitude</td></tr>
+<tr><td>rate</td><td><a href="#rate">Оценка чата</a></td><td>value</td></tr>
+<tr><td>seen</td><td><a href="#seen">Событие прочтения сообщения</a>, в поле id необходимо указазать идентификатор прочитанного сообщения</td><td>id</td></tr>
+<tr><td>keyboard</td><td><a href="#keyboard">Клавиатура с вариантами ответов</a>, подробности в примере</td><td>keyboard</td></tr>
+<tr><td>typein</td><td><a href="#typein">Событие о наборе текста</a>, в поле <code>text</code> этого сообщения можно записать набранный текст, чтобы он был видет пользователю Jivo. Отправлять это событие не чаще 1 раза в 5 секунд от одного клиента</td><td rowspan="3">-</td></tr>
+<tr><td>start</td><td><a href="#start">Начало чата</a>, предназначено для начала чата без отправки сообщения клиентом</td></tr>
+<tr><td>stop</td><td><a href="#stop">Завершение чата</a>, сигнал о том, что события по этому клиенту больше не принимаются</td></tr>
+</tbody>
+</table>
+
+<h2><a id="example"></a>Примеры событий</h2>
+<p></p>
+<h3><a id="jivo"></a>Пример события от Jivo</h3>
+<p>Если для пользователя Jivo определено хоть одно свойство отправителя, в событие добавляется поле <code>sender</code> с этой информацией. Получатель сообщения идентифицируется полем <code>recipient.id</code>.</p>
+<pre>{
+   "sender": {
+      "id": "XXX",
+      "name": "Консультант",
+      "photo": "https://example.com/avatar.png",
+      "email": "info@jivosite.com"
+   },
+   "recipient": {
+      "id": "001"
+   },
+   "message": {
+      "type": "text",
+      "id":   "0000",
+      "date": 946684800,
+      "text": "Добрый день!"
+   }
+}</pre>
+<h3><a id="keyboard"></a>Клавиатура с вариантами ответов</h3>
+<p>Клавиатура может быть отправлена только от пользователя Jivo к клиенту:
+<pre>{
+   "recipient": {
+      "id": "001"
+   },
+   "message": {
+      "type":     "keyboard",
+      "id":       "0009",
+      "title":    "Опрос",
+      "text":     "Быть или не быть?",
+      "multiple": false,
+      "keyboard": [
+         {
+            "id": "1",
+            "text": "да"
+         },
+         {
+            "id": "2",
+            "text": "нет"
+         },
+         {
+            "id": "X",
+            "text": "надо подумать..."
+         }
+      ]
+   }
+}</pre></p>
+<p>Ожидается, что ответом клиента на такое сообщение будет один элемент из массива <code>keyboard</code>, если <code>multiple != true</code>:<pre>{
+   "sender": {
+      "id": "001"
+   },
+   "message": {
+      "type":     "keyboard",
+      "id":       "0009",
+      "multiple": false,
+      "keyboard": [
+         {
+            "id": "X",
+            "text": "надо подумать..."
+         }
+      ]
+   }
+}
+</pre>
+или несколько, в случае <code>multiple = true</code>.</p>
+<p>Если клиентское приложение не поддерживает клавиатуру с вариантами ответов, рекомендуется преобразовать этот тип сообщения в текстовый список для отображения клиенту, наример:
+<pre>Опрос
+
+Быть или не быть?
+   1) да
+   2) нет
+   X) надо подумать...
+</pre>
+Ответом на сообщение <code>keyboard</code> может быть текстовое сообщение, например:<pre>{
+   "sender": {
+      "id": "001"
+   },
+   "message": {
+      "type":  "text",
+      "text":  "надо подумать..."
+   }
+}
+</pre></p>
+<p>Далее следуют примеры событий для отправки в Jivo.</p>
+<h3><a id="start"></a>Начало чата</h3>
+<p>При первом событии от клиента, рекомендуется заполнить структуру <code>sender</code>. Далее, достаточно поля <code>sender.id</code>, а остальные поля этой структуры можно заполнять только при их изменении.</p>
+<pre>{
+   "sender": {
+      "id":     "001",
+      "name":   "Иван Иванович",
+      "photo":  "https://example.com/me.jpg",
+      "url":    "https://example.com/",
+      "phone":  "+7(958)100-32-91",
+      "email":  "me@example.com",
+      "invite": "Здравствуйте! Могу вам чем то помочь?"
+   },
+   "message": {
+      "type": "start"
+   }
+}</pre>
+<h3><a id="text"></a>Текстовое сообщение</h3>
+<pre>{
+   "sender": {
+      "id": "001"
+   },
+   "message": {
+      "type": "text",
+      "id":   "0001",
+      "date": 946684800,
+      "text": "Добрый день!"
+   }
+}</pre>
+<h3><a id="photo"></a>Изображение</h3>
+<pre>{
+   "sender": {
+      "id": "001"
+   },
+   "message": {
+      "type":      "photo",
+      "id":        "0002",
+      "date":      946684800,
+      "file":      "https://example.com/image.png",
+      "mime_type": "image/png",
+      "file_name": "image.png",
+      "file_size": 1024,
+      "thumb":     "https://example.com/image_thumb.png",
+      "width":     800,
+      "height":    600,
+      "title":     "Заголовок",
+      "text":      "Комментарий к изображению."
+   }
+}</pre>
+<h3><a id="sticker"></a>Стикер</h3>
+<pre>{
+   "sender": {
+      "id": "001"
+   },
+   "message": {
+      "type":      "sticker",
+      "id":        "0003",
+      "date":      946684800,
+      "file":      "https://example.com/sticker.gif",
+      "mime_type": "image/gif",
+      "file_name": "sticker.gif",
+      "file_size": 1024,
+      "width":     256,
+      "height":    256
+   }
+}</pre>
+<h3><a id="video"></a>Видео сообщение</h3>
+<pre>{
+   "sender": {
+      "id": "001"
+   },
+   "message": {
+      "type":      "video",
+      "id":        "0004",
+      "date":      946684800,
+      "file":      "https://example.com/video.mp4",
+      "mime_type": "video/mp4",
+      "file_name": "video.mp4",
+      "file_size": 1048576,
+      "thumb":     "https://example.com/video_thumb.png",
+      "width":     640,
+      "height":    480,
+      "title":     "Заголовок",
+      "text":      "Комментарий к видео."
+   }
+}</pre>
+<h3><a id="audio"></a>Звуковое сообщение</h3>
+<pre>{
+   "sender": {
+      "id": "001"
+   },
+   "message": {
+      "type":      "audio",
+      "id":        "0005",
+      "date":      946684800,
+      "file":      "https://example.com/audio.mp3",
+      "mime_type": "audio/mpeg",
+      "file_name": "audio.mp3",
+      "file_size": 2048,
+      "title":     "Заголовок",
+      "text":      "Комментарий к звуковому сообщению."
+   }
+}</pre>
+<h3><a id="document"></a>Документ или файл</h3>
+<pre>{
+   "sender": {
+      "id": "001"
+   },
+   "message": {
+      "type":      "document",
+      "id":        "0006",
+      "date":      946684800,
+      "file":      "https://example.com/document.pdf",
+      "mime_type": "application/pdf",
+      "file_name": "document.pdf",
+      "file_size": 512,
+      "title":     "Заголовок",
+      "text":      "Комментарий к документу."
+   }
+}</pre>
+<h3><a id="location"></a>Местоположение</h3>
+<pre>{
+   "sender": {
+      "id": "001"
+   },
+   "message": {
+      "type":      "location",
+      "id":        "0007",
+      "date":      946684800,
+      "text":      "Это тут.",
+      "latitude":  53.3416484,
+      "longitude": -6.2868531
+   }
+}</pre>
+<h3><a id="rate"></a>Оценка чата</h3>
+<p> На данный момент используются 3 варианта значения поля <code>value</code>: 0 интерпретируется как отказ оценивать, положительное число - положительная оценка, отрицательное число - отрицательная оценка чата.</p>
+<pre>{
+   "sender": {
+      "id": "001"
+   },
+   "message": {
+      "type":  "rate",
+      "id":    "0008",
+      "value": 1
+   }
+}</pre>
+<h3><a id="typein"></a>Событие о наборе текста</h3>
+<pre>{
+   "sender": {
+      "id": "001"
+   },
+   "message": {
+      "type": "typein",
+      "text": "Подождите мину"
+   }
+}</pre>
+<h3><a id="seen"></a>Событие прочтения сообщения</h3>
+<pre>{
+   "sender": {
+      "id": "001"
+   },
+   "message": {
+      "type": "seen",
+      "id":   "0001"
+   }
+}</pre>
+<h3><a id="stop"></a>Завершение чата</h3>
+<pre>{
+   "sender": {
+      "id": "001"
+   },
+   "message": {
+      "type": "stop"
+   }
+}</pre>
+
+<h2><a id="oops"></a>Решение проблем</h2>
+<p>При обнаружении неточностей в этой памятке, либо при ее несоответствии действительности, просьба сообщить в чат поддержки <a href="https://www.jivo.ru/">Jivo</a> или на <a href="mailto:info@jivosite.com?subject=Chat%20API">email</a>.</p>
+
 
     <!-- Global site tag (gtag.js) - Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-54CDH15LPH"></script>
@@ -108,36 +434,9 @@
         <div><img src="https://mc.yandex.ru/watch/64687519" style="position:absolute; left:-9999px;" alt="" /></div>
     </noscript>
     <!-- /Yandex.Metrika counter -->
-    
-    <script src="//code-ya.jivosite.com/widget/JGs7aborFr" async></script>
-    
-    <!-- webim button generation date: 2021-09-22 version: 10.3.49 -->
-<a class="webim_button" href="#" rel="webim"><img src="https://blackseatechcom.webim.ru/button.php" border="0"/></a>
-<script type="text/javascript">
 
-  webim = {
-    accountName: "blackseatechcom",
-    domain: "blackseatechcom.webim.ru"
-  };
-  (function () {
-      var s = document.createElement("script");
-      s.type = "text/javascript";
-      s.src = "https://blackseatechcom.webim.ru/js/button.js";
-      document.getElementsByTagName("head")[0].appendChild(s);
-  })();
-</script>
-<!-- /webim button -->
+    <script src="//code-ya.jivosite.com/widget/mHG6jLfEc7" async></script>
     
-<script>
-  window.intercomSettings = {
-    app_id: "hybwi6us"
-  };
-</script>
 
-<script>
-// We pre-filled your app ID in the widget URL: 'https://widget.intercom.io/widget/hybwi6us'
-(function(){var w=window;var ic=w.Intercom;if(typeof ic==="function"){ic('reattach_activator');ic('update',w.intercomSettings);}else{var d=document;var i=function(){i.c(arguments);};i.q=[];i.c=function(args){i.q.push(args);};w.Intercom=i;var l=function(){var s=d.createElement('script');s.type='text/javascript';s.async=true;s.src='https://widget.intercom.io/widget/hybwi6us';var x=d.getElementsByTagName('script')[0];x.parentNode.insertBefore(s,x);};if(w.attachEvent){w.attachEvent('onload',l);}else{w.addEventListener('load',l,false);}}})();
-</script>
-    
 </body>
 </html>
